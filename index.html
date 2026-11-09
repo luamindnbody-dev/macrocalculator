@@ -34,7 +34,23 @@
         .banner-link { text-decoration: none; display: block; margin-top: 20px; }
         .banner-placeholder { padding: 15px; background-color: #2c3e50; color: white; text-align: center; border-radius: 8px; font-weight: bold; font-size: 0.95rem; transition: background-color 0.3s; }
         .banner-placeholder:hover { background-color: #1a252f; }
-    </style>
+    .meal-title { font-size: 1rem; font-weight: 800; color: #2c3e50; margin: 22px 0 6px; }
+.meal-lead { font-size: 0.85rem; color: #777; margin: 0 0 10px; line-height: 1.5; }
+.meal-tbl { width: 100%; border-collapse: collapse; font-size: 0.88rem; background: #fff; border-radius: 8px; overflow: hidden; }
+.meal-tbl th, .meal-tbl td { padding: 8px 6px; border-bottom: 1px solid #e1e8e5; text-align: right; }
+.meal-tbl th:first-child, .meal-tbl td:first-child { text-align: left; }
+.meal-tbl thead th { font-size: 0.78rem; color: #888; font-weight: 600; }
+.meal-card { background: #fff; border: 1px solid #e1e8e5; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+.meal-card .mh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.meal-card .mh b { font-size: 0.98rem; color: #2c3e50; }
+.meal-card .mh span { font-size: 0.8rem; color: #888; }
+.meal-card ul { margin: 0; padding-left: 18px; font-size: 0.9rem; line-height: 1.7; color: #444; }
+.meal-card .alt { font-size: 0.8rem; color: #888; margin: 6px 0 0; }
+.tips { margin-top: 12px; padding: 12px 14px; background: #eaf1ee; border-radius: 8px; color: #3b534a; font-size: 0.88rem; line-height: 1.6; }
+.tips ul { margin: 6px 0 0; padding-left: 18px; }
+.tips li { margin-bottom: 6px; }
+.tips li b { margin-right: 4px; }
+</style>
 </head>
 <body>
     <div class="container">
@@ -114,6 +130,7 @@
             </div>
             <div class="estimation-box" id="res-estimation"></div>
             <div class="warn-box" id="res-warn"></div>
+<div id="res-meals"></div>
         </div>
 
         <div class="note">
@@ -226,7 +243,64 @@
             warnBox.innerHTML = warns.join("<br>");
             warnBox.style.display = warns.length ? "block" : "none";
             document.getElementById('result-box').style.display = "block";
+renderMeals(targetCalories, carbGrams, proteinGrams, fatGrams, mode);
         }
-    </script>
+    // ===== 한 끼 양 + 예시 식단 =====
+const FOOD = {oat:[60,13,7],egg:[0.6,6,5],rice:[33,2.5,0.3],chicken:[0,23,2],sweet:[28,1.5,0.1],cod:[0,18,0.7],yogurt:[4,10,0.4],nuts:[20,20,50],apple:[14,0.3,0.2],veg:[5,2,0.3],oil:[0,0,100]};
+function per(k,g){const v=FOOD[k],m=k==='egg'?g:g/100;return[v[0]*m,v[1]*m,v[2]*m];}
+function solve(goal,roles,fixed){
+const g={c:0,p:0,f:0};
+for(let it=0;it<8;it++){
+['c','p','f'].forEach((r,i)=>{
+const k=roles[r]; if(!k)return;
+let other=0; fixed.forEach(([fk,fg])=>other+=per(fk,fg)[i]);
+['c','p','f'].forEach(r2=>{if(r2!==r&&roles[r2])other+=per(roles[r2],g[r2])[i];});
+const unit=k==='egg'?FOOD[k][i]:FOOD[k][i]/100;
+g[r]=Math.max(0,(goal[i]-other)/unit);
+});
+}
+return g;
+}
+const r5=n=>Math.round(n/5)*5, r10=n=>Math.round(n/10)*10;
+const fmt=n=>Math.round(n).toLocaleString('ko-KR');
+function tot(items){let C=0,P=0,F=0;items.forEach(([k,g])=>{const v=per(k,g);C+=v[0];P+=v[1];F+=v[2];});return C*4+P*4+F*9;}
+function renderMeals(T,C,P,F,mode){
+const plan=[['아침',.25],['점심',.35],['저녁',.30],['간식',.10]];
+const G=s=>[C*s,P*s,F*s];
+const rows=plan.map(([n,s])=>`<tr><td><b>${n}</b></td><td>${fmt(T*s)}</td><td>${fmt(C*s)}g</td><td>${fmt(P*s)}g</td><td>${fmt(F*s)}g</td></tr>`).join('');
+const eggs=Math.min(2,Math.max(1,Math.floor((F*.25-4)/5)));
+let x=solve(G(.25),{c:'oat',p:'yogurt'},[['egg',eggs]]);
+const oat=r5(x.c), byog=r10(x.p);
+const bI=[['oat',oat],['egg',eggs],['yogurt',byog]];
+x=solve(G(.35),{c:'rice',p:'chicken',f:'oil'},[['veg',150]]);
+const rice=r10(x.c), chick=r10(x.p), loil=Math.round(x.f);
+const lI=[['rice',rice],['chicken',chick],['oil',loil],['veg',150]];
+x=solve(G(.30),{c:'sweet',p:'cod',f:'oil'},[['veg',150]]);
+const sweet=r10(x.c), cod=r10(x.p), doil=Math.round(x.f);
+const dI=[['sweet',sweet],['cod',cod],['oil',doil],['veg',150]];
+x=solve(G(.10),{c:'apple',p:'yogurt',f:'nuts'},[]);
+const apple=r10(x.c), yog=r10(x.p), snuts=r5(x.f);
+const sI=[['apple',apple],['yogurt',yog],['nuts',snuts]];
+const total=tot(bI)+tot(lI)+tot(dI)+tot(sI);
+const oilTxt=g=>g>=3?`올리브유·참기름 ${g}g (약 ${Math.max(1,Math.round(g/5))}작은술)`:'';
+const card=(t,items,list,alt)=>`<div class="meal-card"><div class="mh"><b>${t}</b><span>약 ${fmt(tot(items))}kcal</span></div><ul>${list.filter(Boolean).map(i=>`<li>${i}</li>`).join('')}</ul><p class="alt">바꿔 먹기: ${alt}</p></div>`;
+document.getElementById('res-meals').innerHTML=`
+<div class="meal-title">🍽️ 한 끼에 이만큼 먹어요</div>
+<p class="meal-lead">하루 목표를 아침 25% · 점심 35% · 저녁 30% · 간식 10%로 나눴어요. 하루 두 끼라면 아침과 간식을 합쳐 한 끼로 먹어도 돼요.</p>
+<table class="meal-tbl"><thead><tr><th>끼니</th><th>칼로리</th><th>탄</th><th>단</th><th>지</th></tr></thead><tbody>${rows}</tbody></table>
+<div class="meal-title">🥗 예시 식단</div>
+<p class="meal-lead">위 양에 맞춘 하루 예시예요. 밥·고구마·고기·생선은 익힌 뒤 무게예요. 합계 약 ${fmt(total)}kcal</p>
+${card('아침',bI,[`오트밀 ${oat}g (물에 불려서)`,`달걀 ${eggs}개`,byog>=30?`그릭요거트(무가당) ${byog}g`:''],'오트밀 대신 통밀빵, 요거트 대신 두유·우유')}
+${card('점심',lI,[`밥 ${rice}g`,`닭가슴살 ${chick}g`,`채소 반찬·샐러드 넉넉히`,oilTxt(loil)],'잡곡밥, 소고기 우둔, 돼지 안심')}
+${card('저녁',dI,[`고구마 ${sweet}g`,`흰살생선(대구·동태) ${cod}g`,`채소 넉넉히`,oilTxt(doil)],'생선 대신 두부·연어, 고구마 대신 현미밥')}
+${card('간식',sI,[`그릭요거트(무가당) ${yog}g`,`사과 ${apple}g`,snuts>=5?`견과 ${snuts}g`:''],'단백질 음료, 삶은 달걀, 바나나')}
+<div class="tips"><b>💡 식단 팁</b><ul>
+${mode==='cut'?'<li><b>당류</b> 감량 중에는 당류를 특히 조심해요. 단 음료, 과자, 빵, 소스·드레싱에 숨은 설탕을 줄이고, 첨가당은 하루 25g(각설탕 약 6개) 안쪽으로 맞춰요. 영양성분표의 "당류"를 확인하는 습관을 들여요.</li>':''}
+${mode==='gain'?'<li><b>양이 많을 때</b> 양이 많으면 간식을 한 번 더 나눠 드세요.</li>':''}
+<li><b>저녁 혈당</b> 저녁에는 낮보다 혈당이 오르기 쉬워요. 채소 → 단백질 → 탄수화물 순서로 먹고, 식사 후 10~15분 가볍게 걸어요. 저녁은 잠들기 2~3시간 전에 마치는 게 좋아요.</li>
+<li><b>식이섬유</b> 식이섬유는 하루 20~30g(여성 약 20g, 남성 약 30g)을 목표로 챙겨요. 끼니마다 채소 두 주먹, 흰쌀 대신 잡곡·고구마·통곡물, 과일 하루 1~2번, 콩·버섯·해조류를 자주 먹으면 쉽게 채워져요. 포만감이 오래가고 혈당도 천천히 올라요.</li>
+</ul></div>`;
+}
+</script>
 </body>
 </html>
